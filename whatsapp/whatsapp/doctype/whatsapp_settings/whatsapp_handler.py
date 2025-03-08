@@ -6,65 +6,153 @@ import hashlib
 
 @frappe.whitelist(allow_guest=True)
 def handle_webhook():
+    """Handle incoming webhooks from WhatsApp Cloud API"""
     try:
         if frappe.request.method == "GET":
-            return handle_webhook_verification()
+            # Handle the webhook verification request
+            mode = frappe.form_dict.get("hub.mode")
+            token = frappe.form_dict.get("hub.verify_token")
+            challenge = frappe.form_dict.get("hub.challenge")
+
+            settings = frappe.get_single("WhatsApp Settings")
+            
+            # Check if a token and mode were sent
+            if mode and token:
+                # Check the mode and token sent are correct
+                if mode == "subscribe" and token == settings.webhook_verify_token:
+                    # Respond with 200 OK and challenge token from the request
+                    frappe.local.response.http_status_code = 200
+                    return challenge
+                else:
+                    # Responds with '403 Forbidden' if verify tokens do not match
+                    frappe.local.response.http_status_code = 403
+                    return "Forbidden"
+
+            frappe.local.response.http_status_code = 400
+            return "Bad Request"
+
         elif frappe.request.method == "POST":
-            return handle_webhook_event()
-        else:
-            frappe.local.response.http_status_code = 405
-            return "Method not allowed"
+            # Parse the request body from the POST
+            body = json.loads(frappe.request.data)
+
+            # Check if this is an event from a WhatsApp API
+            if body.get("object") == "whatsapp_business_account":
+                # Handle the message or status update
+                try:
+                    entry = body.get("entry", [])[0]
+                    changes = entry.get("changes", [])[0]
+                    value = changes.get("value", {})
+
+                    # Handle different types of updates
+                    if "messages" in value:
+                        # Handle incoming message
+                        messages = value.get("messages", [])
+                        for message in messages:
+                            handle_incoming_message(message)
+                    elif "statuses" in value:
+                        # Handle message status update
+                        statuses = value.get("statuses", [])
+                        for status in statuses:
+                            handle_status_update(status)
+
+                    # Return a '200 OK' response to all requests
+                    frappe.local.response.http_status_code = 200
+                    return "OK"
+
+                except Exception as e:
+                    frappe.logger().error(f"Error processing webhook: {str(e)}\nPayload: {json.dumps(body, indent=2)}")
+                    frappe.local.response.http_status_code = 500
+                    return "Internal Server Error"
+
+            else:
+                # Return a '404 Not Found' if event is not from WhatsApp API
+                frappe.local.response.http_status_code = 404
+                return "Not Found"
+
+        # Return a '405 Method Not Allowed' if not GET or POST
+        frappe.local.response.http_status_code = 405
+        return "Method Not Allowed"
+
     except Exception as e:
         frappe.logger().error(f"Webhook Error: {str(e)}")
         frappe.local.response.http_status_code = 500
         return "Internal Server Error"
-
-def handle_webhook_verification():
-    try:
-        settings = frappe.get_single("WhatsApp Settings")
-        
-        mode = frappe.form_dict.get("hub.mode")
-        token = frappe.form_dict.get("hub.verify_token")
-        challenge = frappe.form_dict.get("hub.challenge")
-
-        if not all([mode, token, challenge]):
-            frappe.local.response.http_status_code = 400
-            return "Missing required parameters"
-
-        if mode == "subscribe" and token == settings.webhook_verify_token:
-            frappe.local.response.http_status_code = 200
-            return challenge
-        else:
-            frappe.local.response.http_status_code = 403
-            return "Verification failed"
     except Exception as e:
         frappe.logger().error(f"Webhook Verification Error: {str(e)}")
         frappe.local.response.http_status_code = 500
         return "Internal Server Error"
 
-def handle_webhook_event():
+def handle_incoming_message(message):
+    """Handle incoming WhatsApp message and create lead"""
     try:
-        # Verify request signature
-        signature = frappe.get_request_header("X-Hub-Signature-256", "")
-        if not verify_webhook_signature(signature):
-            frappe.throw(_("Invalid webhook signature"), exc=frappe.PermissionError)
+        message_type = message.get("type")
+        from_number = message.get("from")
+        message_id = message.get("id")
+        timestamp = message.get("timestamp")
 
-        data = json.loads(frappe.request.data)
-        
-        if "entry" not in data or not data["entry"]:
-            return "ok"
+        # Extract message content based on type
+        content = ""
+        if message_type == "text":
+            content = message.get("text", {}).get("body", "")
+        elif message_type == "image":
+            content = message.get("image", {}).get("caption", "[Image]") or "[Image]"
+        elif message_type == "document":
+            content = message.get("document", {}).get("caption", "[Document]") or "[Document]"
+        elif message_type == "video":
+            content = message.get("video", {}).get("caption", "[Video]") or "[Video]"
+        elif message_type == "audio":
+            content = "[Audio]"
+        elif message_type == "location":
+            loc = message.get("location", {})
+            content = f"[Location] Lat: {loc.get('latitude')}, Long: {loc.get('longitude')}"
+        elif message_type == "contacts":
+            content = "[Contact Card]"
+        else:
+            content = f"[{message_type} message]"
 
-        for entry in data["entry"]:
-            if "changes" in entry:
-                for change in entry["changes"]:
-                    handle_status_update(change["value"])
-            
-            if "messages" in entry:
-                for message in entry["messages"]:
-                    handle_incoming_message(message)
+        # Create WhatsApp Message record
+        whatsapp_message = create_whatsapp_message(
+            message_id=message_id,
+            from_number=from_number,
+            message_type=message_type,
+            content=content,
+            timestamp=timestamp
+        )
 
-        return "ok"
+        # Create or update lead
+        create_lead_from_message(whatsapp_message)
+
+        # Send acknowledgment for new leads
+        send_lead_acknowledgment(from_number)
+
     except Exception as e:
+        frappe.logger().error(
+            message=f"Error handling message: {str(e)}\nMessage: {json.dumps(message, indent=2)}",
+            title="WhatsApp Message Handler Error"
+        )
+        raise
+
+def handle_status_update(status):
+    """Handle message status updates"""
+    try:
+        message_id = status.get("id")
+        status_type = status.get("status")  # sent, delivered, read, failed
+        timestamp = status.get("timestamp")
+
+        # Update WhatsApp Message status
+        if message_id:
+            message = frappe.get_doc("WhatsApp Message", {"message_id": message_id})
+            if message:
+                message.status = status_type
+                message.status_timestamp = timestamp
+                message.save(ignore_permissions=True)
+
+    except Exception as e:
+        frappe.logger().error(
+            message=f"Error handling status update: {str(e)}\nStatus: {json.dumps(status, indent=2)}",
+            title="WhatsApp Status Handler Error"
+        )
+        raise
         frappe.log_error(f"WhatsApp Webhook Error: {str(e)}", "WhatsApp Webhook Handler")
         return "ok"
 
@@ -92,105 +180,104 @@ def verify_webhook_signature(signature):
     except Exception:
         return False
 
-def handle_status_update(data):
-    """Handle message status updates (sent, delivered, read, etc.)"""
+def create_whatsapp_message(message_id, from_number, message_type, content, timestamp):
+    """Create a record for the incoming WhatsApp message"""
     try:
-        status = data.get("status", [])
-        message_id = data.get("id")
-        
-        if status and message_id:
-            # Update your message tracking system here
-            frappe.db.set_value("WhatsApp Message", {"message_id": message_id}, "status", status[0])
-            frappe.db.commit()
-    except Exception as e:
-        frappe.log_error(f"WhatsApp Status Update Error: {str(e)}", "WhatsApp Status Handler")
+        message = frappe.get_doc({
+            "doctype": "WhatsApp Message",
+            "message_id": message_id,
+            "from_number": from_number,
+            "direction": "Incoming",
+            "message_type": message_type,
+            "content": content,
+            "timestamp": frappe.utils.get_datetime(int(timestamp)),
+            "status": "Received"
+        })
+        message.insert(ignore_permissions=True)
+        return message
 
-def handle_incoming_message(message):
-    """Handle incoming WhatsApp messages and create leads"""
-    try:
-        # Extract message details
-        message_id = message.get("id")
-        from_number = message.get("from")
-        timestamp = message.get("timestamp")
-        
-        # Handle different message types
-        if "text" in message:
-            text = message["text"].get("body", "")
-            # Create WhatsApp message record
-            whatsapp_message = create_whatsapp_message(
-                message_id=message_id,
-                from_number=from_number,
-                message_type="text",
-                content=text,
-                timestamp=timestamp
-            )
-            
-            # Create or update lead
-            create_lead_from_message(whatsapp_message)
-            
-        # Add support for other message types here (media, location, etc.)
-        
     except Exception as e:
-        frappe.log_error(f"WhatsApp Message Handler Error: {str(e)}", "WhatsApp Message Handler")
+        frappe.logger().error(
+            message=f"Error creating WhatsApp message: {str(e)}\nMessage ID: {message_id}",
+            title="WhatsApp Message Creation Error"
+        )
+        raise
 
 def create_lead_from_message(whatsapp_message):
     """Create or update lead from WhatsApp message"""
     try:
-        # Check if lead exists with this phone number
-        existing_lead = frappe.get_list(
-            "Lead",
-            filters={
-                "whatsapp_number": whatsapp_message.from_number
-            },
-            limit=1
-        )
+        # Check if lead exists with this WhatsApp number
+        lead_name = frappe.db.get_value("Lead", {"whatsapp_number": whatsapp_message.from_number})
         
-        if existing_lead:
+        if lead_name:
             # Update existing lead
-            lead = frappe.get_doc("Lead", existing_lead[0].name)
+            lead = frappe.get_doc("Lead", lead_name)
             lead.append("notes", {
-                "note": f"WhatsApp Message: {whatsapp_message.content}",
+                "note": f"WhatsApp Message ({whatsapp_message.message_type}): {whatsapp_message.content}",
                 "added_by": frappe.session.user,
                 "added_on": frappe.utils.now_datetime()
             })
             lead.save(ignore_permissions=True)
             return lead
-        
-        # Create new lead
-        lead = frappe.get_doc({
-            "doctype": "Lead",
-            "lead_name": f"WhatsApp Lead {whatsapp_message.from_number}",
-            "source": "WhatsApp",
-            "whatsapp_number": whatsapp_message.from_number,
-            "notes": [{
-                "note": f"Initial WhatsApp Message: {whatsapp_message.content}",
-                "added_by": frappe.session.user,
-                "added_on": frappe.utils.now_datetime()
-            }],
-            "status": "Open"
-        })
-        lead.insert(ignore_permissions=True)
-        
-        # Send acknowledgment message
-        send_lead_acknowledgment(whatsapp_message.from_number)
-        
-        return lead
+        else:
+            # Create new lead
+            lead = frappe.get_doc({
+                "doctype": "Lead",
+                "lead_name": f"WhatsApp Lead {whatsapp_message.from_number}",
+                "whatsapp_number": whatsapp_message.from_number,
+                "source": "WhatsApp",
+                "status": "Open",
+                "notes": [{
+                    "note": f"WhatsApp Message ({whatsapp_message.message_type}): {whatsapp_message.content}",
+                    "added_by": frappe.session.user,
+                    "added_on": frappe.utils.now_datetime()
+                }]
+            })
+            lead.insert(ignore_permissions=True)
+            return lead
+
     except Exception as e:
-        frappe.log_error(f"Lead Creation Error: {str(e)}", "WhatsApp Lead Creation")
+        frappe.logger().error(
+            message=f"Error creating/updating lead: {str(e)}\nMessage: {whatsapp_message.as_dict()}",
+            title="WhatsApp Lead Creation Error"
+        )
+        raise
 
 def send_lead_acknowledgment(to_number):
     """Send acknowledgment message to new leads"""
     try:
         settings = frappe.get_single("WhatsApp Settings")
-        message = "Thank you for contacting us! Our team will get back to you shortly."
-        
-        whatsapp_message = frappe.get_doc({
-            "doctype": "WhatsApp Message",
-            "to_number": to_number,
-            "content": message,
-            "message_type": "text",
-            "direction": "outgoing"
-        })
+        if not settings.enabled or not settings.send_acknowledgment:
+            return
+
+        # Get the acknowledgment template
+        template = settings.acknowledgment_template or {
+            "name": "lead_welcome",
+            "language": {
+                "code": "en"
+            },
+            "components": [{
+                "type": "body",
+                "parameters": [{
+                    "type": "text",
+                    "text": "there"
+                }]
+            }]
+        }
+
+        # Send the template message
+        settings.send_message(
+            to_number=to_number,
+            message_content=template,
+            message_type="template"
+        )
+
+    except Exception as e:
+        frappe.logger().error(
+            message=f"Error sending acknowledgment: {str(e)}\nTo: {to_number}",
+            title="WhatsApp Acknowledgment Error"
+        )
+        # Don't raise the error as this is a non-critical operation
         whatsapp_message.insert(ignore_permissions=True)
     except Exception as e:
         frappe.log_error(f"Acknowledgment Error: {str(e)}", "WhatsApp Acknowledgment")
