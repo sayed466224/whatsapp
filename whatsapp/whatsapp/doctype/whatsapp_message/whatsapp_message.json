@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "creation": "2025-03-09 03:22:43.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "message_id",
+  "direction",
+  "status",
+  "from_number",
+  "to_number",
+  "column_break_5",
+  "message_type",
+  "content",
+  "timestamp",
+  "media_section",
+  "media_url",
+  "media_type",
+  "media_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "message_id",
+   "fieldtype": "Data",
+   "label": "Message ID",
+   "unique": 1
+  },
+  {
+   "fieldname": "direction",
+   "fieldtype": "Select",
+   "label": "Direction",
+   "options": "incoming\noutgoing"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "sent\ndelivered\nread\nfailed"
+  },
+  {
+   "fieldname": "from_number",
+   "fieldtype": "Data",
+   "label": "From Number"
+  },
+  {
+   "fieldname": "to_number",
+   "fieldtype": "Data",
+   "label": "To Number"
+  },
+  {
+   "fieldname": "column_break_5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "message_type",
+   "fieldtype": "Select",
+   "label": "Message Type",
+   "options": "text\ntemplate\nimage\nvideo\ndocument\nlocation"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Text",
+   "label": "Content"
+  },
+  {
+   "fieldname": "timestamp",
+   "fieldtype": "Datetime",
+   "label": "Timestamp"
+  },
+  {
+   "fieldname": "media_section",
+   "fieldtype": "Section Break",
+   "label": "Media Information",
+   "depends_on": "eval:['image', 'video', 'document'].includes(doc.message_type)"
+  },
+  {
+   "fieldname": "media_url",
+   "fieldtype": "Data",
+   "label": "Media URL"
+  },
+  {
+   "fieldname": "media_type",
+   "fieldtype": "Data",
+   "label": "Media Type"
+  },
+  {
+   "fieldname": "media_id",
+   "fieldtype": "Data",
+   "label": "Media ID"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-03-09 03:22:43.000000",
+ "modified_by": "Administrator",
+ "module": "Whatsapp",
+ "name": "WhatsApp Message",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

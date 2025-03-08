@@ -48,6 +48,15 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
+# Fixtures
+# ---------------
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [["name", "in", ["Lead-whatsapp_number"]]]
+    }
+]
+
 # Svg Icons
 # ------------------
 # include app icons in desk
