@@ -73,6 +73,14 @@ fixtures = [
 # 	"Role": "home_page"
 # }
 
+# Webhook URL route
+webhooks = [
+    {
+        "url": "/api/method/whatsapp.whatsapp.doctype.whatsapp_settings.whatsapp_handler.handle_webhook",
+        "verify_request": False  # Verification is handled in the webhook handler
+    }
+]
+
 # Generators
 # ----------
 

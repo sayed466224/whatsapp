@@ -37,9 +37,10 @@ jobs:
           prerelease: false
 
       - name: Get Asset name
+        id: get_asset
         run: |
-          export PKG=$(ls dist/ | grep tar.gz)
-          echo "asset_name=$PKG" >> $GITHUB_ENV
+          PKG=$(ls dist/ | grep tar.gz)
+          echo "pkg_name=$PKG" >> $GITHUB_OUTPUT
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -47,6 +48,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/${{ env.asset_name }}
-          asset_name: ${{ env.asset_name }}
+          asset_path: dist/${{ steps.get_asset.outputs.pkg_name }}
+          asset_name: ${{ steps.get_asset.outputs.pkg_name }}
           asset_content_type: application/gzip

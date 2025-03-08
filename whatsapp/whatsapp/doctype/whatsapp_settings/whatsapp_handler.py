@@ -6,25 +6,41 @@ import hashlib
 
 @frappe.whitelist(allow_guest=True)
 def handle_webhook():
-    if frappe.request.method == "GET":
-        return handle_webhook_verification()
-    elif frappe.request.method == "POST":
-        return handle_webhook_event()
-    
-    frappe.throw(_("Method not allowed"), exc=frappe.PermissionError)
+    try:
+        if frappe.request.method == "GET":
+            return handle_webhook_verification()
+        elif frappe.request.method == "POST":
+            return handle_webhook_event()
+        else:
+            frappe.local.response.http_status_code = 405
+            return "Method not allowed"
+    except Exception as e:
+        frappe.logger().error(f"Webhook Error: {str(e)}")
+        frappe.local.response.http_status_code = 500
+        return "Internal Server Error"
 
 def handle_webhook_verification():
-    settings = frappe.get_single("WhatsApp Settings")
-    
-    mode = frappe.form_dict.get("hub.mode")
-    token = frappe.form_dict.get("hub.verify_token")
-    challenge = frappe.form_dict.get("hub.challenge")
+    try:
+        settings = frappe.get_single("WhatsApp Settings")
+        
+        mode = frappe.form_dict.get("hub.mode")
+        token = frappe.form_dict.get("hub.verify_token")
+        challenge = frappe.form_dict.get("hub.challenge")
 
-    if mode and token:
+        if not all([mode, token, challenge]):
+            frappe.local.response.http_status_code = 400
+            return "Missing required parameters"
+
         if mode == "subscribe" and token == settings.webhook_verify_token:
+            frappe.local.response.http_status_code = 200
             return challenge
         else:
-            frappe.throw(_("Webhook verification failed"), exc=frappe.PermissionError)
+            frappe.local.response.http_status_code = 403
+            return "Verification failed"
+    except Exception as e:
+        frappe.logger().error(f"Webhook Verification Error: {str(e)}")
+        frappe.local.response.http_status_code = 500
+        return "Internal Server Error"
 
 def handle_webhook_event():
     try:
