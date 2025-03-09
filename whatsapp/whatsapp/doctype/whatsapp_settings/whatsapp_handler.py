@@ -42,42 +42,42 @@ def handle_webhook():
                 )
                 body = {}
 
-                # Check if this is an event from a WhatsApp API
-                if body.get("object") == "whatsapp_business_account":
-                    # Handle the message or status update
-                    try:
-                        entry = body.get("entry", [])[0]
-                        changes = entry.get("changes", [])[0]
-                        value = changes.get("value", {})
+            # Check if this is an event from a WhatsApp API
+            if body.get("object") == "whatsapp_business_account":
+                # Handle the message or status update
+                try:
+                    entry = body.get("entry", [])[0]
+                    changes = entry.get("changes", [])[0]
+                    value = changes.get("value", {})
 
-                        # Handle different types of updates
-                        if "messages" in value:
-                            # Handle incoming message
-                            messages = value.get("messages", [])
-                            for message in messages:
-                                handle_incoming_message(message)
-                        elif "statuses" in value:
-                            # Handle message status update
-                            statuses = value.get("statuses", [])
-                            for status in statuses:
-                                handle_status_update(status)
+                    # Handle different types of updates
+                    if "messages" in value:
+                        # Handle incoming message
+                        messages = value.get("messages", [])
+                        for message in messages:
+                            handle_incoming_message(message)
+                    elif "statuses" in value:
+                        # Handle message status update
+                        statuses = value.get("statuses", [])
+                        for status in statuses:
+                            handle_status_update(status)
 
-                        # Return a '200 OK' response to all requests
-                        frappe.local.response.http_status_code = 200
-                        return "OK"
+                    # Return a '200 OK' response to all requests
+                    frappe.local.response.http_status_code = 200
+                    return "OK"
 
-                    except Exception as e:
-                        frappe.logger().error(
-                            f"Error processing webhook: {str(e)}\n" 
-                            f"Payload: {json.dumps(body, indent=2)}"
-                        )
-                        frappe.local.response.http_status_code = 500
-                        return "Internal Server Error"
+                except Exception as e:
+                    frappe.logger().error(
+                        message=f"Error processing webhook: {str(e)}\nPayload: {json.dumps(body, indent=2)}",
+                        title="WhatsApp Webhook Error"
+                    )
+                    frappe.local.response.http_status_code = 500
+                    return "Internal Server Error"
 
-                else:
-                    # Return a '404 Not Found' if event is not from WhatsApp API
-                    frappe.local.response.http_status_code = 404
-                    return "Not Found"
+            else:
+                # Return a '404 Not Found' if event is not from WhatsApp API
+                frappe.local.response.http_status_code = 404
+                return "Not Found"
 
         # Return a '405 Method Not Allowed' if not GET or POST
         frappe.local.response.http_status_code = 405
