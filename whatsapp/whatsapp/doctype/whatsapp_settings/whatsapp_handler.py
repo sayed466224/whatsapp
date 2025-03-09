@@ -44,9 +44,10 @@ def handle_webhook():
                 if mode and token:
                     # Check the mode and token sent are correct
                     if mode == "subscribe" and token == settings.webhook_verify_token:
-                        # Respond with 200 OK and challenge token from the request
+                        # Return raw challenge value as plain text
                         frappe.local.response.http_status_code = 200
-                        return challenge
+                        frappe.local.response.headers["Content-Type"] = "text/plain"
+                        return str(challenge)
                     else:
                         # Log verification failure
                         frappe.logger().error(
