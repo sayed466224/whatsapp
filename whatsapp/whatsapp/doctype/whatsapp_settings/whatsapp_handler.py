@@ -24,7 +24,7 @@ def handle_webhook():
                 settings = frappe.get_single("WhatsApp Settings")
                 
                 # Check if WhatsApp integration is enabled and configured
-                if not settings.enabled:
+                if not settings.get('enabled'):
                     frappe.logger().error(
                         message="WhatsApp integration is not enabled",
                         title="WhatsApp Webhook Error"
@@ -32,9 +32,15 @@ def handle_webhook():
                     frappe.local.response.http_status_code = 503
                     return "Service Unavailable"
 
-                if not all([settings.app_id, settings.app_secret, settings.webhook_verify_token]):
+                required_fields = [
+                    'app_id', 'app_secret', 'webhook_verify_token',
+                    'business_account_id', 'phone_number_id', 'access_token'
+                ]
+                missing_fields = [field for field in required_fields if not settings.get(field)]
+                
+                if missing_fields:
                     frappe.logger().error(
-                        message="WhatsApp settings not fully configured",
+                        message=f"Missing required WhatsApp settings: {', '.join(missing_fields)}",
                         title="WhatsApp Webhook Error"
                     )
                     frappe.local.response.http_status_code = 503
