@@ -63,11 +63,47 @@
    "read_only": 1
   },
   {
+   "fieldname": "app_secret",
+   "fieldtype": "Password",
+   "label": "App Secret",
+   "description": "App secret from WhatsApp Business API settings",
+   "mandatory_depends_on": "eval:doc.enabled"
+  },
+  {
+   "fieldname": "webhook_section",
+   "fieldtype": "Section Break",
+   "label": "Webhook Configuration",
+   "collapsible": 0
+  },
+  {
+   "fieldname": "webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "description": "URL for receiving WhatsApp webhooks",
+   "read_only": 1
+  },
+  {
    "fieldname": "webhook_verify_token",
    "fieldtype": "Data",
    "label": "Webhook Verify Token",
    "description": "Token used to verify webhook requests from WhatsApp",
    "mandatory_depends_on": "eval:doc.enabled"
+  },
+  {
+   "fieldname": "verify_webhook_btn",
+   "fieldtype": "Button",
+   "label": "Verify Webhook Configuration",
+   "depends_on": "eval:doc.enabled && doc.webhook_verify_token"
+  },
+  {
+   "fieldname": "column_break_webhook",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "webhook_status",
+   "fieldtype": "HTML",
+   "label": "Webhook Status",
+   "options": "<div class='webhook-status'></div>"
   },
   {
    "default": "1",
@@ -83,12 +119,6 @@
    "description": "WhatsApp message template for lead acknowledgment",
    "options": "JSON",
    "depends_on": "eval:doc.send_acknowledgment"
-  },
-  {
-   "fieldname": "webhook_status",
-   "fieldtype": "HTML",
-   "label": "Webhook Status",
-   "options": "<div class='webhook-status'></div>"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -167,27 +167,42 @@ def handle_status_update(status):
         return "ok"
 
 def verify_webhook_signature(signature):
+    """Verify the signature of incoming webhook requests
+    
+    Args:
+        signature (str): X-Hub-Signature-256 header from the request
+        
+    Returns:
+        bool: True if signature is valid, False otherwise
+    """
     if not signature:
         return False
 
     try:
         settings = frappe.get_single("WhatsApp Settings")
-        app_secret = settings.get_password("access_token")  # You might want to store this separately
+        app_secret = settings.get_password("app_secret")  # Get the app secret from settings
         
+        # Parse the signature header
         elements = signature.split("=")
-        if len(elements) != 2:
+        if len(elements) != 2 or elements[0] != "sha256":
             return False
         
-        sig_hash = elements[1]
+        received_hash = elements[1].lower()
         
+        # Calculate expected hash
         expected_hash = hmac.new(
             app_secret.encode("utf-8"),
             frappe.request.data,
             hashlib.sha256
         ).hexdigest()
         
-        return hmac.compare_digest(sig_hash, expected_hash)
-    except Exception:
+        # Use constant-time comparison
+        return hmac.compare_digest(received_hash, expected_hash)
+    except Exception as e:
+        frappe.logger().error(
+            message=f"Error verifying webhook signature: {str(e)}",
+            title="WhatsApp Webhook Error"
+        )
         return False
 
 
