@@ -42,6 +42,13 @@
    "mandatory_depends_on": "eval:doc.enabled"
   },
   {
+   "fieldname": "app_id",
+   "fieldtype": "Data",
+   "label": "App ID",
+   "description": "Your WhatsApp Business App ID from Meta Developers Console",
+   "mandatory_depends_on": "eval:doc.enabled"
+  },
+  {
    "fieldname": "column_break_5",
    "fieldtype": "Column Break"
   },
@@ -51,17 +58,7 @@
    "label": "Access Token",
    "mandatory_depends_on": "eval:doc.enabled"
   },
-  {
-   "fieldname": "webhook_section",
-   "fieldtype": "Section Break",
-   "label": "Webhook Configuration"
-  },
-  {
-   "fieldname": "webhook_url",
-   "fieldtype": "Data",
-   "label": "Webhook URL",
-   "read_only": 1
-  },
+
   {
    "fieldname": "app_secret",
    "fieldtype": "Password",
