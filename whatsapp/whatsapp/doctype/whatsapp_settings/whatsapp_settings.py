@@ -18,7 +18,8 @@ class WhatsAppSettings(Document):
     def set_webhook_url(self):
         """Set the webhook URL for WhatsApp API"""
         site_url = frappe.utils.get_url()
-        self.webhook_url = urljoin(site_url, "/api/method/whatsapp.whatsapp.doctype.whatsapp_settings.whatsapp_handler.handle_webhook")
+        method_path = "whatsapp.whatsapp.doctype.whatsapp_settings.whatsapp_handler.handle_webhook"
+        self.webhook_url = urljoin(site_url, f"/api/method/{method_path}")
 
     def send_message(self, to_number, message_content, message_type="text"):
         """Send a WhatsApp message
