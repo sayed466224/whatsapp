@@ -21,7 +21,21 @@ def handle_webhook():
             )
 
             try:
-                settings = frappe.get_single("WhatsApp Settings")
+                # Log request parameters for debugging
+                frappe.logger().debug(
+                    message=f"Webhook verification attempt - Parameters: {frappe.local.form_dict}",
+                    title="WhatsApp Webhook Debug"
+                )
+
+                try:
+                    settings = frappe.get_doc("WhatsApp Settings")
+                except Exception as e:
+                    frappe.logger().error(
+                        message=f"Error loading WhatsApp Settings: {str(e)}",
+                        title="WhatsApp Webhook Error"
+                    )
+                    frappe.local.response.http_status_code = 500
+                    return "Internal Server Error"
                 
                 # Check if WhatsApp integration is enabled and configured
                 if not settings.get('enabled'):
@@ -36,6 +50,13 @@ def handle_webhook():
                     'app_id', 'app_secret', 'webhook_verify_token',
                     'business_account_id', 'phone_number_id', 'access_token'
                 ]
+                
+                # Log current settings for debugging
+                frappe.logger().debug(
+                    message=f"Current WhatsApp Settings: {', '.join(f'{field}: {bool(settings.get(field))}' for field in required_fields)}",
+                    title="WhatsApp Webhook Debug"
+                )
+
                 missing_fields = [field for field in required_fields if not settings.get(field)]
                 
                 if missing_fields:
