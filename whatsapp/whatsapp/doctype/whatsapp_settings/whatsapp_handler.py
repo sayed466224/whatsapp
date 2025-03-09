@@ -20,32 +20,58 @@ def handle_webhook():
                 title="WhatsApp Webhook Verification"
             )
 
-            settings = frappe.get_single("WhatsApp Settings")
-            
-            # Check if a token and mode were sent
-            if mode and token:
-                # Check the mode and token sent are correct
-                if mode == "subscribe" and token == settings.webhook_verify_token:
-                    # Respond with 200 OK and challenge token from the request
-                    frappe.local.response.http_status_code = 200
-                    return challenge
-                else:
-                    # Log verification failure
+            try:
+                settings = frappe.get_single("WhatsApp Settings")
+                
+                # Check if WhatsApp integration is enabled and configured
+                if not settings.enabled:
                     frappe.logger().error(
-                        message=f"Webhook verification failed - Expected token: {settings.webhook_verify_token}, Received token: {token}",
-                        title="WhatsApp Webhook Verification Failed"
+                        message="WhatsApp integration is not enabled",
+                        title="WhatsApp Webhook Error"
                     )
-                    # Responds with '403 Forbidden' if verify tokens do not match
-                    frappe.local.response.http_status_code = 403
-                    return "Forbidden"
+                    frappe.local.response.http_status_code = 503
+                    return "Service Unavailable"
 
-            # Log bad request
-            frappe.logger().warning(
-                message=f"Invalid webhook verification request - Missing mode or token",
-                title="WhatsApp Webhook Bad Request"
-            )
-            frappe.local.response.http_status_code = 400
-            return "Bad Request"
+                if not all([settings.app_id, settings.app_secret, settings.webhook_verify_token]):
+                    frappe.logger().error(
+                        message="WhatsApp settings not fully configured",
+                        title="WhatsApp Webhook Error"
+                    )
+                    frappe.local.response.http_status_code = 503
+                    return "Service Unavailable"
+                
+                # Check if a token and mode were sent
+                if mode and token:
+                    # Check the mode and token sent are correct
+                    if mode == "subscribe" and token == settings.webhook_verify_token:
+                        # Respond with 200 OK and challenge token from the request
+                        frappe.local.response.http_status_code = 200
+                        return challenge
+                    else:
+                        # Log verification failure
+                        frappe.logger().error(
+                            message=f"Webhook verification failed - Expected token: {settings.webhook_verify_token}, Received token: {token}",
+                            title="WhatsApp Webhook Verification Failed"
+                        )
+                        # Responds with '403 Forbidden' if verify tokens do not match
+                        frappe.local.response.http_status_code = 403
+                        return "Forbidden"
+
+                # Log bad request
+                frappe.logger().warning(
+                    message=f"Invalid webhook verification request - Missing mode or token",
+                    title="WhatsApp Webhook Bad Request"
+                )
+                frappe.local.response.http_status_code = 400
+                return "Bad Request"
+
+            except Exception as e:
+                frappe.logger().error(
+                    message=f"Error accessing WhatsApp settings: {str(e)}",
+                    title="WhatsApp Webhook Error"
+                )
+                frappe.local.response.http_status_code = 500
+                return "Internal Server Error"
 
         elif frappe.request.method == "POST":
             # Parse the request body from the POST
