@@ -17,74 +17,23 @@ class WhatsAppSettings(Document):
     
     def set_webhook_url(self):
         site_url = frappe.utils.get_url()
-        self.webhook_url = urljoin(site_url, "/api/method/whatsapp.whatsapp.doctype.whatsapp_settings.whatsapp_handler.handle_webhook")
-
-    @frappe.whitelist()
-    def verify_configuration(self):
-        """Verify WhatsApp Business Account and Phone Number configuration"""
-        if not self.enabled:
-            return {
-                "success": False,
-                "message": "WhatsApp integration is not enabled"
-            }
-
-        try:
-            api_base_url = "https://graph.facebook.com/v22.0"
-            headers = {
-                "Authorization": f"Bearer {self.get_password('access_token')}",
-                "Content-Type": "application/json"
-            }
-
-            # Verify Business Account
-            business_url = f"{api_base_url}/{self.business_account_id}"
-            business_response = requests.get(business_url, headers=headers)
-            business_response.raise_for_status()
-            business_data = business_response.json()
-
-            # Verify Phone Number
-            phone_url = f"{api_base_url}/{self.phone_number_id}"
-            phone_response = requests.get(phone_url, headers=headers)
-            phone_response.raise_for_status()
-            phone_data = phone_response.json()
-
-            return {
-                "success": True,
-                "business_account": {
-                    "id": business_data.get("id"),
-                    "name": business_data.get("name"),
-                    "currency": business_data.get("currency")
-                },
-                "phone_number": {
-                    "id": phone_data.get("id"),
-                    "display_phone_number": phone_data.get("display_phone_number"),
-                    "quality_rating": phone_data.get("quality_rating")
-                }
-            }
-        except requests.exceptions.RequestException as e:
-            error_msg = str(e)
-            if hasattr(e.response, 'json'):
-                try:
-                    error_data = e.response.json()
-                    error_msg = error_data.get("error", {}).get("message", str(e))
-                except:
-                    pass
-            
-            frappe.log_error(
-                message=f"WhatsApp Configuration Error: {error_msg}",
-                title="WhatsApp Verification Error"
-            )
-            
-            return {
-                "success": False,
-                "message": f"Configuration verification failed: {error_msg}"
-            }
+        self.webhook_url = urljoin(site_url, "/api/method/whatsapp.whatsapp.doctype.whatsapp_settings.whatsapp_handler.webhook")
 
     def send_message(self, to_number, message_content, message_type="text"):
+        """Send a WhatsApp message
+        
+        Args:
+            to_number (str): Recipient's WhatsApp number
+            message_content (str|dict): For text messages, a string. For templates, a dict with template details
+            message_type (str, optional): Message type ("text" or "template"). Defaults to "text".
+        
+        Returns:
+            dict: WhatsApp API response
+        """
         if not self.enabled:
             frappe.throw("WhatsApp integration is not enabled")
 
-        api_base_url = "https://graph.facebook.com/v22.0"
-        api_url = f"{api_base_url}/{self.phone_number_id}/messages"
+        api_url = f"https://graph.facebook.com/v22.0/{self.phone_number_id}/messages"
         
         headers = {
             "Authorization": f"Bearer {self.get_password('access_token')}",
@@ -103,44 +52,73 @@ class WhatsAppSettings(Document):
         elif message_type == "template":
             message_data["type"] = "template"
             message_data["template"] = message_content
-        elif message_type == "media":
-            message_data["type"] = message_content.get("type")
-            message_data[message_content["type"]] = {
-                "link": message_content.get("url"),
-                "caption": message_content.get("caption")
-            }
 
         try:
-            # First verify the phone number ID
-            verify_url = f"{api_base_url}/{self.phone_number_id}"
-            verify_response = requests.get(verify_url, headers=headers)
-            verify_response.raise_for_status()
-
-            # Send the message
             response = requests.post(api_url, headers=headers, json=message_data)
-            response_data = response.json()
-
-            if response.status_code != 200:
-                error_msg = response_data.get("error", {}).get("message", "Unknown error")
-                frappe.log_error(
-                    message=f"WhatsApp API Error: {error_msg}\nPayload: {json.dumps(message_data, indent=2)}",
-                    title="WhatsApp Message Error"
-                )
-                frappe.throw(f"Failed to send WhatsApp message: {error_msg}")
-
-            return response_data
-
-        except requests.exceptions.RequestException as e:
-            error_msg = str(e)
-            if hasattr(e.response, 'json'):
-                try:
-                    error_data = e.response.json()
-                    error_msg = error_data.get("error", {}).get("message", str(e))
-                except:
-                    pass
+            response.raise_for_status()
             
-            frappe.log_error(
-                message=f"WhatsApp API Error: {error_msg}\nPayload: {json.dumps(message_data, indent=2)}",
+            # Create WhatsApp Message record
+            whatsapp_message = frappe.get_doc({
+                "doctype": "WhatsApp Message",
+                "to_number": to_number,
+                "message_type": message_type,
+                "content": json.dumps(message_content) if isinstance(message_content, dict) else message_content,
+                "direction": "Outgoing",
+                "status": "Sent"
+            })
+            whatsapp_message.insert(ignore_permissions=True)
+            
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            frappe.logger().error(
+                message=f"WhatsApp API Error: {str(e)}\nPayload: {json.dumps(message_data, indent=2)}",
                 title="WhatsApp Message Error"
             )
-            frappe.throw(f"Failed to send WhatsApp message: {error_msg}")
+            raise
+
+    def verify_webhook_configuration(self):
+        """Verify the webhook configuration with WhatsApp Cloud API"""
+        try:
+            api_url = f"https://graph.facebook.com/v22.0/{self.phone_number_id}/subscribed_apps"
+            
+            headers = {
+                "Authorization": f"Bearer {self.get_password('access_token')}",
+                "Content-Type": "application/json"
+            }
+
+            # Subscribe to webhooks
+            response = requests.post(api_url, headers=headers)
+            response.raise_for_status()
+
+            # Get webhook fields
+            fields = [
+                "messages",
+                "message_deliveries",
+                "message_reads",
+                "message_templates"
+            ]
+
+            # Update webhook subscription
+            update_response = requests.post(
+                api_url,
+                headers=headers,
+                json={
+                    "fields": fields
+                }
+            )
+            update_response.raise_for_status()
+
+            frappe.msgprint("WhatsApp webhook configuration verified successfully")
+            return True
+
+        except requests.exceptions.RequestException as e:
+            frappe.logger().error(
+                message=f"Webhook verification error: {str(e)}",
+                title="WhatsApp Webhook Error"
+            )
+            frappe.msgprint(
+                msg=f"Failed to verify webhook configuration: {str(e)}",
+                title="WhatsApp Webhook Error",
+                indicator="red"
+            )
+            return False

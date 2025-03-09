@@ -33,41 +33,51 @@ def handle_webhook():
 
         elif frappe.request.method == "POST":
             # Parse the request body from the POST
-            body = json.loads(frappe.request.data)
+            try:
+                body = json.loads(frappe.request.data) if frappe.request.data else {}
+            except Exception as e:
+                frappe.logger().error(
+                    message=f"Error parsing webhook data: {str(e)}",
+                    title="WhatsApp Webhook Error"
+                )
+                body = {}
 
-            # Check if this is an event from a WhatsApp API
-            if body.get("object") == "whatsapp_business_account":
-                # Handle the message or status update
-                try:
-                    entry = body.get("entry", [])[0]
-                    changes = entry.get("changes", [])[0]
-                    value = changes.get("value", {})
+                # Check if this is an event from a WhatsApp API
+                if body.get("object") == "whatsapp_business_account":
+                    # Handle the message or status update
+                    try:
+                        entry = body.get("entry", [])[0]
+                        changes = entry.get("changes", [])[0]
+                        value = changes.get("value", {})
 
-                    # Handle different types of updates
-                    if "messages" in value:
-                        # Handle incoming message
-                        messages = value.get("messages", [])
-                        for message in messages:
-                            handle_incoming_message(message)
-                    elif "statuses" in value:
-                        # Handle message status update
-                        statuses = value.get("statuses", [])
-                        for status in statuses:
-                            handle_status_update(status)
+                        # Handle different types of updates
+                        if "messages" in value:
+                            # Handle incoming message
+                            messages = value.get("messages", [])
+                            for message in messages:
+                                handle_incoming_message(message)
+                        elif "statuses" in value:
+                            # Handle message status update
+                            statuses = value.get("statuses", [])
+                            for status in statuses:
+                                handle_status_update(status)
 
-                    # Return a '200 OK' response to all requests
-                    frappe.local.response.http_status_code = 200
-                    return "OK"
+                        # Return a '200 OK' response to all requests
+                        frappe.local.response.http_status_code = 200
+                        return "OK"
 
-                except Exception as e:
-                    frappe.logger().error(f"Error processing webhook: {str(e)}\nPayload: {json.dumps(body, indent=2)}")
-                    frappe.local.response.http_status_code = 500
-                    return "Internal Server Error"
+                    except Exception as e:
+                        frappe.logger().error(
+                            f"Error processing webhook: {str(e)}\n" 
+                            f"Payload: {json.dumps(body, indent=2)}"
+                        )
+                        frappe.local.response.http_status_code = 500
+                        return "Internal Server Error"
 
-            else:
-                # Return a '404 Not Found' if event is not from WhatsApp API
-                frappe.local.response.http_status_code = 404
-                return "Not Found"
+                else:
+                    # Return a '404 Not Found' if event is not from WhatsApp API
+                    frappe.local.response.http_status_code = 404
+                    return "Not Found"
 
         # Return a '405 Method Not Allowed' if not GET or POST
         frappe.local.response.http_status_code = 405
@@ -180,28 +190,7 @@ def verify_webhook_signature(signature):
     except Exception:
         return False
 
-def create_whatsapp_message(message_id, from_number, message_type, content, timestamp):
-    """Create a record for the incoming WhatsApp message"""
-    try:
-        message = frappe.get_doc({
-            "doctype": "WhatsApp Message",
-            "message_id": message_id,
-            "from_number": from_number,
-            "direction": "Incoming",
-            "message_type": message_type,
-            "content": content,
-            "timestamp": frappe.utils.get_datetime(int(timestamp)),
-            "status": "Received"
-        })
-        message.insert(ignore_permissions=True)
-        return message
 
-    except Exception as e:
-        frappe.logger().error(
-            message=f"Error creating WhatsApp message: {str(e)}\nMessage ID: {message_id}",
-            title="WhatsApp Message Creation Error"
-        )
-        raise
 
 def create_lead_from_message(whatsapp_message):
     """Create or update lead from WhatsApp message"""

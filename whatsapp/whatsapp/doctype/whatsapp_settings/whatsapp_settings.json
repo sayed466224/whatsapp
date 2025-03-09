@@ -12,7 +12,10 @@
   "access_token",
   "webhook_section",
   "webhook_url",
-  "webhook_verify_token"
+  "webhook_verify_token",
+  "send_acknowledgment",
+  "acknowledgment_template",
+  "webhook_status"
  ],
  "fields": [
   {
@@ -62,7 +65,30 @@
   {
    "fieldname": "webhook_verify_token",
    "fieldtype": "Data",
-   "label": "Webhook Verify Token"
+   "label": "Webhook Verify Token",
+   "description": "Token used to verify webhook requests from WhatsApp",
+   "mandatory_depends_on": "eval:doc.enabled"
+  },
+  {
+   "default": "1",
+   "fieldname": "send_acknowledgment",
+   "fieldtype": "Check",
+   "label": "Send Acknowledgment",
+   "description": "Send acknowledgment message to new leads"
+  },
+  {
+   "fieldname": "acknowledgment_template",
+   "fieldtype": "Code",
+   "label": "Acknowledgment Template",
+   "description": "WhatsApp message template for lead acknowledgment",
+   "options": "JSON",
+   "depends_on": "eval:doc.send_acknowledgment"
+  },
+  {
+   "fieldname": "webhook_status",
+   "fieldtype": "HTML",
+   "label": "Webhook Status",
+   "options": "<div class='webhook-status'></div>"
   }
  ],
  "index_web_pages_for_search": 1,
