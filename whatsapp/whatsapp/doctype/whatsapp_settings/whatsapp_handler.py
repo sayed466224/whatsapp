@@ -10,9 +10,15 @@ def handle_webhook():
     try:
         if frappe.request.method == "GET":
             # Handle the webhook verification request
-            mode = frappe.form_dict.get("hub.mode")
-            token = frappe.form_dict.get("hub.verify_token")
-            challenge = frappe.form_dict.get("hub.challenge")
+            mode = frappe.local.form_dict.get("hub.mode")
+            token = frappe.local.form_dict.get("hub.verify_token")
+            challenge = frappe.local.form_dict.get("hub.challenge")
+
+            # Log verification attempt
+            frappe.logger().debug(
+                message=f"Webhook verification attempt - Mode: {mode}, Token: {token}, Challenge: {challenge}",
+                title="WhatsApp Webhook Verification"
+            )
 
             settings = frappe.get_single("WhatsApp Settings")
             
@@ -24,10 +30,20 @@ def handle_webhook():
                     frappe.local.response.http_status_code = 200
                     return challenge
                 else:
+                    # Log verification failure
+                    frappe.logger().error(
+                        message=f"Webhook verification failed - Expected token: {settings.webhook_verify_token}, Received token: {token}",
+                        title="WhatsApp Webhook Verification Failed"
+                    )
                     # Responds with '403 Forbidden' if verify tokens do not match
                     frappe.local.response.http_status_code = 403
                     return "Forbidden"
 
+            # Log bad request
+            frappe.logger().warning(
+                message=f"Invalid webhook verification request - Missing mode or token",
+                title="WhatsApp Webhook Bad Request"
+            )
             frappe.local.response.http_status_code = 400
             return "Bad Request"
 
